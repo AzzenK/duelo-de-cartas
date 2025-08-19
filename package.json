@@ -1,7 +1,7 @@
 {
-  "name": "duelo-de-cartas-render",
+  "name": "ascensao-do-mago-final",
   "version": "1.0.0",
-  "description": "Jogo de cartas multiplayer para Render.",
+  "description": "Jogo de cartas multiplayer.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
