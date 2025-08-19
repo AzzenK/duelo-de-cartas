@@ -21,7 +21,7 @@
         .game-wrapper {
             position: relative; width: 100%; height: 100%; overflow: hidden;
             background-color: #1a1a2e; color: var(--primary-text);
-            background: radial-gradient(circle at center, #4a4a6a, #1a1a2e);
+            background: radial-gradient(ellipse at center, #3c3c5a, #1a1a2e);
         }
         .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.3); }
         #main-menu, #mode-selection, #multiplayer-lobby {
@@ -257,10 +257,16 @@
                         this.state.lives = 3;
                         this.UI.opponentStats.classList.remove('hidden');
                         this.UI.livesDisplay.classList.remove('hidden');
+                        this.UI.statsBtn.classList.add('hidden');
+                        this.UI.goldDisplay.classList.add('hidden');
+                        this.UI.xpBar.parentElement.classList.add('hidden');
                     } else {
                         this.state.secondChanceActive = true;
                         this.UI.opponentStats.classList.add('hidden');
                         this.UI.livesDisplay.classList.add('hidden');
+                        this.UI.statsBtn.classList.remove('hidden');
+                        this.UI.goldDisplay.classList.remove('hidden');
+                        this.UI.xpBar.parentElement.classList.remove('hidden');
                     }
                     this.state.deck = this.createDeck();
                     this.shuffleDeck(this.state.deck);
