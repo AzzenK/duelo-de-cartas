@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Duelo de Cartas</title>
+    <title>Ascensão do Mago 2.0</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
@@ -20,11 +20,10 @@
         .hidden { display: none !important; }
         .game-wrapper {
             position: relative; width: 100%; height: 100%; overflow: hidden;
-            background-color: var(--bg-color); color: var(--primary-text);
-            background-image: url('https://i.imgur.com/vHqJgNn.jpeg');
-            background-size: cover; background-position: center;
+            background-color: #1a1a2e; color: var(--primary-text);
+            background: radial-gradient(circle at center, #4a4a6a, #1a1a2e);
         }
-        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(20, 10, 0, 0.5); }
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.3); }
         #main-menu, #mode-selection, #multiplayer-lobby {
             position: relative; z-index: 10;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
@@ -53,6 +52,7 @@
         .bar-label { font-size: 0.7em; color: white; padding: 0 5px; text-shadow: 1px 1px 1px #000; text-align: right; }
         #mana-bar-inner { background: linear-gradient(to right, var(--mana-color), #87CEEB); }
         #xp-bar-inner { background: linear-gradient(to right, var(--xp-color), #f39c12); }
+        .header h1 { font-family: var(--font-title); font-size: 2.2em; color: var(--primary-accent); text-shadow: 0 0 8px var(--primary-accent); }
         .scores { display: flex; justify-content: space-around; font-size: 1.1em; }
         .game-area { display: flex; justify-content: center; align-items: center; gap: 15px; width: 100%; perspective: 1000px; flex-grow: 1; }
         .card { width: 110px; height: 165px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.7); display: flex; flex-direction: column; justify-content: space-between; padding: 8px; font-size: 2.2em; font-weight: 700; position: relative; background-color: var(--card-bg); }
@@ -90,7 +90,7 @@
         <div class="overlay"></div>
 
         <div id="main-menu" class="screen">
-            <h1>Duelo de Cartas</h1>
+            <h1>Ascensão do Mago</h1>
             <input type="text" id="player-name-input" class="text-input" placeholder="Digite seu nome">
             <button id="select-mode-btn" class="menu-btn">Selecionar Modo</button>
         </div>
@@ -120,7 +120,7 @@
             <div class="top-section">
                 <div class="top-bar">
                     <div class="player-stats">
-                        <button id="stats-btn">Nv. <span id="player-level">1</span></button>
+                        <button id="stats-btn">Mago Nv. <span id="player-level">1</span></button>
                     </div>
                     <div id="lives-display" class="hidden">Vidas: ❤️❤️❤️</div>
                 </div>
@@ -151,7 +151,7 @@
             </div>
         </div>
         
-        <div id="modal-shop" class="modal-overlay"><div class="modal"><h2>Loja</h2><div class="shop-grid" id="upgrades-container"></div><button class="menu-btn" id="close-shop-btn">Fechar</button></div></div>
+        <div id="modal-shop" class="modal-overlay"><div class="modal"><h2>Loja do Mago</h2><div class="shop-grid" id="upgrades-container"></div><button class="menu-btn" id="close-shop-btn">Fechar</button></div></div>
         <div id="modal-gameover" class="modal-overlay"><div class="modal"><h2 id="modal-title">Fim da Jornada</h2><p id="modal-message"></p><button class="menu-btn" id="back-to-menu-btn">Voltar ao Menu</button></div></div>
     </div>
 
@@ -233,7 +233,7 @@
                     this.UI.backBtns.forEach(btn => btn.addEventListener('click', () => this.showScreen('mainMenu')));
                     this.UI.soloModeBtn.addEventListener('click', () => { this.state.gameMode = 'solo'; this.showScreen('gameContainer'); this.startGame(); });
                     this.UI.multiplayerModeBtn.addEventListener('click', () => { this.showScreen('multiplayerLobby'); this.connectToServer(); });
-                    this.UI.backToMenuBtn.addEventListener('click', () => { this.showScreen('mainMenu'); this.UI.gameOverModal.classList.remove('visible'); if(ws) ws.close(); });
+                    this.UI.backToMenuBtn.addEventListener('click', () => { this.showScreen('mainMenu'); this.UI.gameOverModal.classList.remove('visible'); if(ws && ws.readyState === WebSocket.OPEN) ws.close(); });
                     this.UI.higherBtn.addEventListener('click', () => this.handleGuess('higher'));
                     this.UI.lowerBtn.addEventListener('click', () => this.handleGuess('lower'));
                     this.UI.scryBtn.addEventListener('click', () => this.castScry());
@@ -336,7 +336,7 @@
                     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                     ws = new WebSocket(`${protocol}//${window.location.host}`);
                     ws.onopen = () => console.log('Conectado ao servidor!');
-                    ws.onclose = () => { if(this.state.gameMode === '1v1') this.showGameOver(false, "Desconectado do servidor."); };
+                    ws.onclose = () => { if(this.state.gameMode === '1v1' && !this.UI.gameOverModal.classList.contains('visible')) this.showGameOver(false, "Desconectado do servidor."); };
                     ws.onmessage = (event) => {
                         const data = JSON.parse(event.data);
                         switch (data.type) {
@@ -373,11 +373,11 @@
                         this.state.player.gold -= cost; this.state.player.upgrades[key]++; this.saveGame(); this.openShop(); this.updateUI();
                     } else { this.createFloatingText('Ouro Insuficiente!', 'health'); }
                 },
-                saveGame() { localStorage.setItem('dueloDeCartasSave', JSON.stringify(this.state.player)); },
-                loadGame() { const saved = localStorage.getItem('dueloDeCartasSave'); if(saved) this.state.player = JSON.parse(saved); }
+                saveGame() { localStorage.setItem('ascensaoDoMagoSave', JSON.stringify(this.state.player)); },
+                loadGame() { const saved = localStorage.getItem('ascensaoDoMagoSave'); if(saved) this.state.player = JSON.parse(saved); }
             };
             G.init();
         });
     </script>
 </body>
-  </html>
+</html>
