@@ -13,7 +13,7 @@ app.get('/', (req, res) => {
 });
 
 let games = {};
-console.log("Servidor Ascensão do Mago está iniciando...");
+console.log("Servidor Ascensão do Mago (Definitivo) está iniciando...");
 
 wss.on('connection', ws => {
     const clientId = Date.now();
