@@ -64,6 +64,11 @@
         .card-front { background-color: var(--card-bg); transform: rotateY(180deg); }
         .card-front.red { color: var(--card-red); } .card-front.black { color: var(--card-black); }
         .card-back { background-image: linear-gradient(45deg, var(--card-back-1), var(--card-back-2)); font-family: var(--font-title); font-size: 4em; color: rgba(255, 255, 255, 0.5); text-shadow: 0 0 5px rgba(255,255,255,0.7); justify-content: center; }
+        .special-card-glow { position: absolute; top: -5px; left: -5px; right: -5px; bottom: -5px; border-radius: 12px; animation: glow-effect 1.5s infinite alternate; }
+        .gold-glow { border: 2px solid var(--gold-color); box-shadow: 0 0 15px var(--gold-color); }
+        .mana-glow { border: 2px solid var(--mana-color); box-shadow: 0 0 15px var(--mana-color); }
+        .curse-glow { border: 2px solid var(--health-color); box-shadow: 0 0 15px var(--health-color); }
+        @keyframes glow-effect { from { opacity: 0.7; } to { opacity: 1; } }
         .spell-controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 10px; }
         .spell-btn { background-color: var(--btn-spell); color: white; border-radius: 50%; width: 50px; height: 50px; border: 2px solid var(--primary-accent); font-size: 1.5em; position: relative; }
         .spell-btn .cost { position: absolute; bottom: -5px; right: -5px; background-color: var(--mana-color); color: white; font-size: 0.5em; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; }
@@ -96,8 +101,9 @@
         </div>
 
         <div id="mode-selection" class="screen hidden">
-            <button id="solo-mode-btn" class="menu-btn">Sozinho</button>
-            <button id="multiplayer-mode-btn" class="menu-btn">1 vs 1</button>
+            <button id="solo-mode-btn" class="menu-btn">Sozinho (Treino)</button>
+            <button id="daily-mode-btn" class="menu-btn">Desafio Diário</button>
+            <button id="multiplayer-mode-btn" class="menu-btn">1 vs 1 Online</button>
             <button class="menu-btn back-btn" style="background-color: #555;">Voltar</button>
         </div>
 
@@ -168,6 +174,7 @@
                     gameContainer: document.getElementById('game-container'),
                     selectModeBtn: document.getElementById('select-mode-btn'),
                     soloModeBtn: document.getElementById('solo-mode-btn'),
+                    dailyModeBtn: document.getElementById('daily-mode-btn'),
                     multiplayerModeBtn: document.getElementById('multiplayer-mode-btn'),
                     createRoomBtn: document.getElementById('create-room-btn'),
                     joinRoomBtn: document.getElementById('join-room-btn'),
@@ -207,8 +214,9 @@
                     modalMessage: document.getElementById('modal-message'),
                 },
                 state: {
-                    deck: [], currentCard: null, nextCard: null, score: 0, combo: 1, isProcessing: false, secondChanceActive: true, gameMode: 'solo',
-                    lives: 3, player: { level: 1, xp: 0, gold: 0, upgrades: { maxMana: 0, manaRegen: 0, scryCost: 0 } }, mana: 10,
+                    deck: [], currentCard: null, nextCard: null, isProcessing: false, gameMode: 'solo',
+                    run: { score: 0, combo: 1, mana: 10, lives: 3, secondChanceActive: true },
+                    player: { level: 1, xp: 0, gold: 0, upgrades: { maxMana: 0, manaRegen: 0, scryCost: 0 } },
                 },
                 CONFIG: {
                     XP_PER_LEVEL: (level) => 100 + (level - 1) * 50,
@@ -217,7 +225,7 @@
                         manaRegen: { name: "Regen de Mana", baseCost: 100, scale: 2, effect: 1 },
                         scryCost: { name: "Vislumbre Eficaz", baseCost: 200, scale: 2.5, effect: -1 },
                     },
-                    BASE_MANA: 10,
+                    BASE_MANA: 10, SPECIAL_CARD_CHANCE: 0.15,
                     SPELL_COSTS: { scry: 15, reshuffle: 10 },
                     SUITS: { "hearts": "♥", "diamonds": "♦", "clubs": "♣", "spades": "♠" },
                     RANKS: ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"],
@@ -226,12 +234,10 @@
 
                 init() {
                     this.loadGame();
-                    this.UI.selectModeBtn.addEventListener('click', () => {
-                        playerName = this.UI.playerNameInput.value.trim();
-                        if (playerName) this.showScreen('modeSelection'); else alert('Por favor, digite seu nome.');
-                    });
+                    this.UI.selectModeBtn.addEventListener('click', () => { playerName = this.UI.playerNameInput.value.trim(); if (playerName) this.showScreen('modeSelection'); else alert('Por favor, digite seu nome.'); });
                     this.UI.backBtns.forEach(btn => btn.addEventListener('click', () => this.showScreen('mainMenu')));
                     this.UI.soloModeBtn.addEventListener('click', () => { this.state.gameMode = 'solo'; this.showScreen('gameContainer'); this.startGame(); });
+                    this.UI.dailyModeBtn.addEventListener('click', () => { this.state.gameMode = 'daily'; this.showScreen('gameContainer'); this.startGame(); });
                     this.UI.multiplayerModeBtn.addEventListener('click', () => { this.showScreen('multiplayerLobby'); this.connectToServer(); });
                     this.UI.backToMenuBtn.addEventListener('click', () => { this.showScreen('mainMenu'); this.UI.gameOverModal.classList.remove('visible'); if(ws && ws.readyState === WebSocket.OPEN) ws.close(); });
                     this.UI.higherBtn.addEventListener('click', () => this.handleGuess('higher'));
@@ -246,43 +252,30 @@
                     this.showScreen('mainMenu');
                 },
 
-                showScreen(screenName) {
-                    Object.keys(this.UI).forEach(key => { if (this.UI[key].classList && this.UI[key].classList.contains('screen')) { this.UI[key].classList.add('hidden'); } });
-                    this.UI[screenName].classList.remove('hidden');
-                },
+                showScreen(screenName) { Object.keys(this.UI).forEach(key => { if (this.UI[key].classList && this.UI[key].classList.contains('screen')) { this.UI[key].classList.add('hidden'); } }); this.UI[screenName].classList.remove('hidden'); },
 
                 startGame() {
-                    this.state.score = 0; this.state.combo = 1; this.state.isProcessing = false; this.state.mana = this.getMaxMana();
-                    if (this.state.gameMode === '1v1') {
-                        this.state.lives = 3;
-                        this.UI.opponentStats.classList.remove('hidden');
-                        this.UI.livesDisplay.classList.remove('hidden');
-                        this.UI.statsBtn.classList.add('hidden');
-                        this.UI.goldDisplay.classList.add('hidden');
-                        this.UI.xpBar.parentElement.classList.add('hidden');
-                    } else {
-                        this.state.secondChanceActive = true;
-                        this.UI.opponentStats.classList.add('hidden');
-                        this.UI.livesDisplay.classList.add('hidden');
-                        this.UI.statsBtn.classList.remove('hidden');
-                        this.UI.goldDisplay.classList.remove('hidden');
-                        this.UI.xpBar.parentElement.classList.remove('hidden');
-                    }
-                    this.state.deck = this.createDeck();
-                    this.shuffleDeck(this.state.deck);
+                    this.state.run = { score: 0, combo: 1, mana: this.getMaxMana(), lives: 3, secondChanceActive: true };
+                    this.state.isProcessing = false;
+                    const is1v1 = this.state.gameMode === '1v1';
+                    this.UI.opponentStats.classList.toggle('hidden', !is1v1); this.UI.livesDisplay.classList.toggle('hidden', !is1v1);
+                    this.UI.statsBtn.classList.toggle('hidden', is1v1); this.UI.goldDisplay.classList.toggle('hidden', is1v1); this.UI.xpBar.parentElement.classList.toggle('hidden', is1v1);
+
+                    const seed = this.state.gameMode === 'daily' ? this.getDailySeed() : Date.now();
+                    this.state.deck = this.createDeck(); this.shuffleDeck(this.state.deck, seed);
                     this.state.currentCard = this.state.deck.pop();
                     this.renderCard(this.UI.currentCard, this.state.currentCard);
                     this.UI.nextCardFront.innerHTML = '';
                     this.UI.nextCardFront.classList.remove('red', 'black');
                     this.UI.nextCardFlipper.classList.remove('flipped');
-                    this.updateUI();
-                    this.UI.gameOverModal.classList.remove('visible');
-                    this.enableControls(true);
+                    this.updateUI(); this.UI.gameOverModal.classList.remove('visible'); this.enableControls(true);
                 },
-                createDeck() { const d = []; for (let s in this.CONFIG.SUITS) { for (let r of this.CONFIG.RANKS) { d.push({ suit: this.CONFIG.SUITS[s], rank: r, value: this.CONFIG.VALUES[r], color: (s==='hearts'||s==='diamonds')?'red':'black' }); } } return d; },
-                shuffleDeck(d) { for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; } },
-                renderCard(el, card) { el.innerHTML = `<span class="rank">${card.rank}</span><span class="suit">${card.suit}</span><span class="rank rank-bottom">${card.rank}</span>`; el.className = `card ${card.color}`; },
-                renderCardFace(el, card) { el.innerHTML = `<span class="rank">${card.rank}</span><span class="suit">${card.suit}</span><span class="rank rank-bottom">${card.rank}</span>`; el.classList.remove('red', 'black'); el.classList.add(card.color); },
+                getDailySeed() { const n = new Date(); return n.getFullYear() * 10000 + (n.getMonth() + 1) * 100 + n.getDate(); },
+                seededRandom(s) { let x = Math.sin(s++) * 10000; return x - Math.floor(x); },
+                createDeck() { const d = []; for (let s in this.CONFIG.SUITS) { for (let r of this.CONFIG.RANKS) { d.push({ suit: this.CONFIG.SUITS[s], rank: r, value: this.CONFIG.VALUES[r], color: (s==='hearts'||s==='diamonds')?'red':'black' }); } } for(let i=0; i<Math.floor(d.length * this.CONFIG.SPECIAL_CARD_CHANCE); i++) { const type = ['gold','mana','curse'][Math.floor(Math.random()*3)]; const cardIndex = Math.floor(Math.random()*d.length); if(!d[cardIndex].special) d[cardIndex].special = type; } return d; },
+                shuffleDeck(d, seed) { let m = d.length, t, i; while (m) { i = Math.floor(this.seededRandom(seed++) * m--); t = d[m]; d[m] = d[i]; d[i] = t; } return d; },
+                renderCard(el, card) { el.innerHTML = `<span class="rank">${card.rank}</span><span class="suit">${card.suit}</span><span class="rank rank-bottom">${card.rank}</span>`; el.className = `card ${card.color}`; if(card.special) el.innerHTML += `<div class="special-card-glow ${card.special}-glow"></div>`; },
+                renderCardFace(el, card) { el.innerHTML = `<span class="rank">${card.rank}</span><span class="suit">${card.suit}</span><span class="rank rank-bottom">${card.rank}</span>`; el.classList.remove('red', 'black'); el.classList.add(card.color); if(card.special) el.innerHTML += `<div class="special-card-glow ${card.special}-glow"></div>`; },
 
                 handleGuess(guess) {
                     if (this.state.isProcessing) return;
@@ -293,51 +286,49 @@
                     const isCorrect = (guess === 'higher' && this.state.nextCard.value >= this.state.currentCard.value) || (guess === 'lower' && this.state.nextCard.value <= this.state.currentCard.value);
                     setTimeout(() => {
                         if (isCorrect) {
-                            this.state.score++; this.state.combo++;
-                            this.state.mana = Math.min(this.getMaxMana(), this.state.mana + 1 + this.getUpgradeEffect('manaRegen'));
+                            this.state.run.score++; this.state.run.combo++; this.state.run.mana = Math.min(this.getMaxMana(), this.state.run.mana + 1 + this.getUpgradeEffect('manaRegen'));
                             this.state.currentCard = this.state.nextCard;
-                            if (this.state.gameMode === '1v1') ws.send(JSON.stringify({ type: 'update', state: { score: this.state.score, level: this.state.player.level } }));
-                            this.UI.nextCardFlipper.style.transition = 'none';
-                            this.UI.nextCardFlipper.classList.remove('flipped');
+                            if (this.state.currentCard.special) this.handleSpecialCard(this.state.currentCard.special);
+                            if (this.state.gameMode === '1v1') ws.send(JSON.stringify({ type: 'update', state: { score: this.state.run.score, level: this.state.player.level } }));
+                            this.UI.nextCardFlipper.style.transition = 'none'; this.UI.nextCardFlipper.classList.remove('flipped');
                             this.renderCard(this.UI.currentCard, this.state.currentCard);
-                            this.UI.nextCardFront.innerHTML = '';
-                            this.UI.nextCardFront.classList.remove('red', 'black');
+                            this.UI.nextCardFront.innerHTML = ''; this.UI.nextCardFront.classList.remove('red', 'black');
                             setTimeout(() => { this.UI.nextCardFlipper.style.transition = 'transform 0.6s'; this.state.isProcessing = false; this.enableControls(true); }, 50);
                         } else {
-                            if (this.state.gameMode === '1v1') { ws.send(JSON.stringify({type: 'lostLife'})); this.state.lives--; this.createFloatingText('-1 Vida!', 'health'); this.newTurn(); }
+                            this.state.run.combo = 0;
+                            if (this.state.gameMode === '1v1') { ws.send(JSON.stringify({type: 'lostLife'})); this.state.run.lives--; this.createFloatingText('-1 Vida!', 'health'); this.newTurn(); }
                             else {
-                                if (this.state.secondChanceActive) {
-                                    this.state.secondChanceActive = false;
-                                    this.createFloatingText('Segunda Chance!', 'health');
-                                    this.state.isProcessing = false; this.enableControls(true);
-                                    this.UI.nextCardFlipper.classList.remove('flipped');
+                                if (this.state.run.secondChanceActive) {
+                                    this.state.run.secondChanceActive = false; this.createFloatingText('Segunda Chance!', 'health');
+                                    this.state.isProcessing = false; this.enableControls(true); this.UI.nextCardFlipper.classList.remove('flipped');
                                 } else {
-                                    const xpGained = this.state.score * 10; const goldGained = this.state.score * 5;
+                                    const xpGained = this.state.run.score * 10; const goldGained = this.state.run.score * 5;
                                     this.state.player.xp += xpGained; this.state.player.gold += goldGained;
                                     this.checkLevelUp(); this.saveGame();
-                                    this.showGameOver(false, `Você alcançou o andar ${this.state.score}. Recompensas: ${xpGained} XP, ${goldGained} Ouro.`);
+                                    this.showGameOver(false, `Você alcançou o andar ${this.state.run.score}. Recompensas: ${xpGained} XP, ${goldGained} Ouro.`);
                                 }
                             }
                         }
                         this.updateUI();
                     }, 1200);
                 },
-                newTurn() { this.state.score = 0; this.state.combo = 1; this.state.isProcessing = false; this.enableControls(true); this.UI.nextCardFlipper.classList.remove('flipped'); this.state.deck = this.createDeck(); this.shuffleDeck(this.state.deck); this.state.currentCard = this.state.deck.pop(); this.renderCard(this.UI.currentCard, this.state.currentCard); },
-                castScry() { const cost = this.getSpellCost('scry'); if (this.state.mana >= cost && !this.state.isProcessing) { this.state.mana -= cost; this.state.nextCard = this.state.deck[this.state.deck.length - 1]; this.renderCardFace(this.UI.nextCardFront, this.state.nextCard); this.UI.nextCardFlipper.classList.add('flipped'); setTimeout(() => this.UI.nextCardFlipper.classList.remove('flipped'), 2000); this.updateUI(); } },
-                castReshuffle() { const cost = this.CONFIG.SPELL_COSTS.reshuffle; if (this.state.mana >= cost && !this.state.isProcessing) { this.state.mana -= cost; this.state.deck.push(this.state.currentCard); this.shuffleDeck(this.state.deck); this.state.currentCard = this.state.deck.pop(); this.renderCard(this.UI.currentCard, this.state.currentCard); this.createFloatingText('Embaralhar!', 'spell'); this.updateUI(); } },
+                handleSpecialCard(type) { if (type === 'gold') { const gold = 10 + this.state.player.level; this.state.player.gold += gold; this.createFloatingText(`+${gold} Ouro!`, 'gold');} if (type === 'mana') { const mana = 5; this.state.run.mana = Math.min(this.getMaxMana(), this.state.run.mana+mana); this.createFloatingText(`+${mana} Mana!`, 'mana');} if (type === 'curse') { this.state.run.combo = 0; this.createFloatingText('Maldição!', 'health'); } },
+                newTurn() { this.state.run.score = 0; this.state.run.combo = 1; this.state.isProcessing = false; this.enableControls(true); this.UI.nextCardFlipper.classList.remove('flipped'); this.state.deck = this.createDeck(); this.shuffleDeck(this.state.deck, Date.now()); this.state.currentCard = this.state.deck.pop(); this.renderCard(this.UI.currentCard, this.state.currentCard); },
+                castScry() { const cost = this.getSpellCost('scry'); if (this.state.run.mana >= cost && !this.state.isProcessing) { this.state.run.mana -= cost; this.state.nextCard = this.state.deck[this.state.deck.length - 1]; this.renderCardFace(this.UI.nextCardFront, this.state.nextCard); this.UI.nextCardFlipper.classList.add('flipped'); setTimeout(() => this.UI.nextCardFlipper.classList.remove('flipped'), 2000); this.updateUI(); } },
+                castReshuffle() { const cost = this.CONFIG.SPELL_COSTS.reshuffle; if (this.state.run.mana >= cost && !this.state.isProcessing) { this.state.run.mana -= cost; this.state.deck.push(this.state.currentCard); this.shuffleDeck(this.state.deck, Date.now()); this.state.currentCard = this.state.deck.pop(); this.renderCard(this.UI.currentCard, this.state.currentCard); this.createFloatingText('Embaralhar!', 'spell'); this.updateUI(); } },
                 showGameOver(isWinner, message) { this.UI.modalTitle.textContent = isWinner ? "Você Venceu!" : "Fim de Jogo"; this.UI.modalMessage.textContent = message; this.UI.gameOverModal.classList.add('visible'); },
                 updateUI() {
-                    this.UI.score.textContent = `Andar: ${this.state.score}`; this.UI.goldDisplay.textContent = `Ouro: ${this.state.player.gold}`;
-                    this.UI.comboDisplay.textContent = `Combo: x${this.state.combo}`; this.UI.playerLevel.textContent = this.state.player.level;
-                    const maxMana = this.getMaxMana(); this.UI.manaLabel.textContent = `${this.state.mana}/${maxMana}`;
-                    this.UI.manaBar.style.width = `${(this.state.mana / maxMana) * 100}%`;
+                    this.UI.score.textContent = `Andar: ${this.state.run.score}`; this.UI.goldDisplay.textContent = `Ouro: ${this.state.player.gold}`;
+                    this.UI.comboDisplay.textContent = `Combo: x${this.state.run.combo}`; this.UI.playerLevel.textContent = this.state.player.level;
+                    const maxMana = this.getMaxMana(); this.UI.manaLabel.textContent = `${this.state.run.mana}/${maxMana}`;
+                    this.UI.manaBar.style.width = `${(this.state.run.mana / maxMana) * 100}%`;
                     const xpNeeded = this.CONFIG.XP_PER_LEVEL(this.state.player.level); this.UI.xpLabel.textContent = `${this.state.player.xp}/${xpNeeded}`;
                     this.UI.xpBar.style.width = `${(this.state.player.xp / xpNeeded) * 100}%`;
-                    if (this.state.gameMode === 'solo') { this.UI.secondChanceIcon.style.display = 'inline-block'; this.UI.secondChanceIcon.classList.toggle('active', this.state.secondChanceActive); }
-                    else { this.UI.secondChanceIcon.style.display = 'none'; this.UI.livesDisplay.textContent = 'Vidas: ' + '❤️'.repeat(this.state.lives); }
+                    if (this.state.gameMode !== '1v1') { this.UI.secondChanceIcon.style.display = 'inline-block'; this.UI.secondChanceIcon.classList.toggle('active', this.state.run.secondChanceActive); }
+                    else { this.UI.secondChanceIcon.style.display = 'none'; this.UI.livesDisplay.textContent = 'Vidas: ' + '❤️'.repeat(this.state.run.lives); }
                 },
                 enableControls(enabled) { this.UI.higherBtn.disabled = !enabled; this.UI.lowerBtn.disabled = !enabled; this.UI.scryBtn.disabled = !enabled; this.UI.reshuffleBtn.disabled = !enabled; },
-                createFloatingText(text, type) { const el = document.createElement('div'); el.className = 'floating-text'; el.textContent = text; if(type === 'health') el.style.color = 'var(--health-color)'; if(type === 'spell') el.style.color = 'var(--primary-accent)'; document.getElementById('floating-text-container').appendChild(el); setTimeout(() => el.remove(), 1500); },
+                createFloatingText(text, type) { const el = document.createElement('div'); el.className = 'floating-text'; el.textContent = text; if(type === 'health') el.style.color = 'var(--health-color)'; if(type === 'spell') el.style.color = 'var(--primary-accent)'; if(type === 'gold') el.style.color = 'var(--gold-color)'; if(type === 'mana') el.style.color = 'var(--mana-color)'; document.getElementById('floating-text-container').appendChild(el); setTimeout(() => el.remove(), 1500); },
                 connectToServer() {
                     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                     ws = new WebSocket(`${protocol}//${window.location.host}`);
