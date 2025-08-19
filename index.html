@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Duelo de Cartas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d0c1d; --primary-text: #e0e0e0; --primary-accent: #a482ff; --secondary-accent: #ff8a71;
+            --mana-color: #26a8ff; --xp-color: #f1c40f; --gold-color: #ffd700; --health-color: #ff5555;
+            --btn-higher: #2ecc71; --btn-lower: #e74c3c; --btn-spell: #8e44ad; --btn-disabled: #7f8c8d;
+            --card-bg: #fdfdfd; --card-red: #c0392b; --card-black: #2c3e50; --card-back-1: #4b0082; --card-back-2: #6a0dad;
+            --font-title: 'MedievalSharp', cursive; --font-body: 'Roboto', sans-serif;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { width: 100%; height: 100%; overflow: hidden; font-family: var(--font-body); }
+        .hidden { display: none !important; }
+        .game-wrapper {
+            position: relative; width: 100%; height: 100%; overflow: hidden;
+            background-color: var(--bg-color); color: var(--primary-text);
+            background-image: url('https://i.imgur.com/vHqJgNn.jpeg');
+            background-size: cover; background-position: center;
+        }
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(20, 10, 0, 0.5); }
+        #main-menu, #mode-selection, #multiplayer-lobby {
+            position: relative; z-index: 10;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            height: 100%; text-align: center; padding: 20px;
+        }
+        #main-menu h1 {
+            font-family: var(--font-title); font-size: 3em; color: var(--primary-accent);
+            text-shadow: 0 0 15px var(--primary-accent); margin-bottom: 40px;
+        }
+        .menu-btn {
+            background-color: var(--primary-accent); color: white; border: none; border-radius: 10px;
+            padding: 15px 30px; font-size: 1.5em; font-family: var(--font-body);
+            margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.4); width: 100%; max-width: 300px;
+        }
+        .text-input {
+            padding: 10px; font-size: 1.2em; text-align: center; border-radius: 5px;
+            border: 2px solid var(--primary-accent); margin-top: 10px; width: 100%; max-width: 300px;
+        }
+        #room-code-display { font-size: 2em; color: var(--gold-color); margin-top: 15px; letter-spacing: 5px; }
+        .game-container { position: relative; z-index: 1; display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 10px; text-align: center; }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; padding: 0 5px; }
+        .player-stats button { background: none; border: 1px solid var(--primary-accent); color: var(--primary-accent); border-radius: 5px; padding: 5px 10px; }
+        .status-bars { width: 100%; padding: 5px 0; }
+        .bar { background-color: #333; border-radius: 5px; margin-bottom: 5px; padding: 2px; }
+        .bar-inner { height: 14px; border-radius: 3px; transition: width 0.3s ease; }
+        .bar-label { font-size: 0.7em; color: white; padding: 0 5px; text-shadow: 1px 1px 1px #000; text-align: right; }
+        #mana-bar-inner { background: linear-gradient(to right, var(--mana-color), #87CEEB); }
+        #xp-bar-inner { background: linear-gradient(to right, var(--xp-color), #f39c12); }
+        .scores { display: flex; justify-content: space-around; font-size: 1.1em; }
+        .game-area { display: flex; justify-content: center; align-items: center; gap: 15px; width: 100%; perspective: 1000px; flex-grow: 1; }
+        .card { width: 110px; height: 165px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.7); display: flex; flex-direction: column; justify-content: space-between; padding: 8px; font-size: 2.2em; font-weight: 700; position: relative; background-color: var(--card-bg); }
+        .card.red { color: var(--card-red); } .card.black { color: var(--card-black); }
+        .card .rank { align-self: flex-start; } .card .suit { font-size: 1.8em; text-align: center; } .card .rank-bottom { align-self: flex-end; transform: rotate(180deg); }
+        .card-flipper { width: 110px; height: 165px; position: relative; transform-style: preserve-3d; transition: transform 0.6s; }
+        .card-flipper.flipped { transform: rotateY(180deg); }
+        .card-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 8px; border-radius: 8px; }
+        .card-front { background-color: var(--card-bg); transform: rotateY(180deg); }
+        .card-front.red { color: var(--card-red); } .card-front.black { color: var(--card-black); }
+        .card-back { background-image: linear-gradient(45deg, var(--card-back-1), var(--card-back-2)); font-family: var(--font-title); font-size: 4em; color: rgba(255, 255, 255, 0.5); text-shadow: 0 0 5px rgba(255,255,255,0.7); justify-content: center; }
+        .spell-controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 10px; }
+        .spell-btn { background-color: var(--btn-spell); color: white; border-radius: 50%; width: 50px; height: 50px; border: 2px solid var(--primary-accent); font-size: 1.5em; position: relative; }
+        .spell-btn .cost { position: absolute; bottom: -5px; right: -5px; background-color: var(--mana-color); color: white; font-size: 0.5em; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; }
+        .spell-btn:disabled { background-color: var(--btn-disabled); border-color: #555; }
+        #second-chance-icon.active { box-shadow: 0 0 15px white; }
+        .main-controls { width: 100%; display: flex; justify-content: space-around; }
+        .btn { width: 48%; padding: 18px 10px; font-size: 1.4em; font-weight: 700; border-radius: 12px; border: none; color: white; }
+        .btn-higher { background-color: var(--btn-higher); } .btn-lower { background-color: var(--btn-lower); }
+        .btn:disabled { background-color: var(--btn-disabled); pointer-events: none; }
+        #opponent-stats { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; border: 1px solid var(--primary-accent); }
+        #lives-display { font-size: 1.2em; color: var(--health-color); }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; z-index: 100; }
+        .modal-overlay.visible { opacity: 1; pointer-events: auto; }
+        .modal { background-color: #1e1b34; padding: 20px; border-radius: 15px; text-align: center; border: 2px solid var(--primary-accent); width: 90%; }
+        .shop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .upgrade-item { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; }
+        .upgrade-item button { width: 100%; padding: 8px; background-color: var(--secondary-accent); border: none; color: white; }
+        .floating-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: var(--font-title); font-size: 1.5em; pointer-events: none; opacity: 0; animation: floatUp 1.5s ease-out; z-index: 101; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translate(-50%, -50%); } 100% { opacity: 0; transform: translate(-50%, -200%); } }
+    </style>
+</head>
+<body>
+    <div class="game-wrapper">
+        <div class="overlay"></div>
+
+        <div id="main-menu" class="screen">
+            <h1>Duelo de Cartas</h1>
+            <input type="text" id="player-name-input" class="text-input" placeholder="Digite seu nome">
+            <button id="select-mode-btn" class="menu-btn">Selecionar Modo</button>
+        </div>
+
+        <div id="mode-selection" class="screen hidden">
+            <button id="solo-mode-btn" class="menu-btn">Sozinho</button>
+            <button id="multiplayer-mode-btn" class="menu-btn">1 vs 1</button>
+            <button class="menu-btn back-btn" style="background-color: #555;">Voltar</button>
+        </div>
+
+        <div id="multiplayer-lobby" class="screen hidden">
+            <button id="create-room-btn" class="menu-btn">Criar Sala</button>
+            <p id="room-code-display"></p>
+            <button id="join-room-btn" class="menu-btn">Entrar na Sala</button>
+            <input type="text" id="room-code-input" class="text-input hidden" placeholder="Digite o código">
+            <button class="menu-btn back-btn" style="background-color: #555;">Voltar</button>
+        </div>
+
+        <div id="game-container" class="screen hidden">
+            <div id="floating-text-container"></div>
+            <div id="opponent-stats" class="hidden">
+                <p id="opponent-name">Oponente</p>
+                <p>Andar: <span id="opponent-score">0</span></p>
+                <p>Nível: <span id="opponent-level">1</span></p>
+                <p>Vidas: <span id="opponent-lives">3</span></p>
+            </div>
+            <div class="top-section">
+                <div class="top-bar">
+                    <div class="player-stats">
+                        <button id="stats-btn">Nv. <span id="player-level">1</span></button>
+                    </div>
+                    <div id="lives-display" class="hidden">Vidas: ❤️❤️❤️</div>
+                </div>
+                <div class="status-bars">
+                    <div class="bar"><div id="mana-bar-inner" class="bar-inner"><span id="mana-label" class="bar-label"></span></div></div>
+                    <div class="bar"><div id="xp-bar-inner" class="bar-inner"><span id="xp-label" class="bar-label"></span></div></div>
+                </div>
+                <div class="scores">
+                    <span id="score">Andar: 0</span>
+                    <span id="gold-display">Ouro: 0</span>
+                    <span id="combo-display">Combo: x1</span>
+                </div>
+            </div>
+            <div class="game-area">
+                <div id="current-card" class="card"></div>
+                <div id="next-card-container"><div class="card-flipper"><div class="card-face card-back">?</div><div class="card-face card-front"></div></div></div>
+            </div>
+            <div class="bottom-section">
+                <div class="spell-controls">
+                    <button id="scry-btn" class="spell-btn">👁️<span class="cost">15</span></button>
+                    <button id="second-chance-icon" class="spell-btn">❤️</button>
+                    <button id="reshuffle-btn" class="spell-btn">♻️<span class="cost">10</span></button>
+                </div>
+                <div class="main-controls">
+                    <button id="lower-btn" class="btn btn-lower">MENOR ▼</button>
+                    <button id="higher-btn" class="btn btn-higher">MAIOR ▲</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="modal-shop" class="modal-overlay"><div class="modal"><h2>Loja</h2><div class="shop-grid" id="upgrades-container"></div><button class="menu-btn" id="close-shop-btn">Fechar</button></div></div>
+        <div id="modal-gameover" class="modal-overlay"><div class="modal"><h2 id="modal-title">Fim da Jornada</h2><p id="modal-message"></p><button class="menu-btn" id="back-to-menu-btn">Voltar ao Menu</button></div></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let ws;
+            let playerName = '';
+            
+            const G = {
+                UI: {
+                    mainMenu: document.getElementById('main-menu'),
+                    modeSelection: document.getElementById('mode-selection'),
+                    multiplayerLobby: document.getElementById('multiplayer-lobby'),
+                    gameContainer: document.getElementById('game-container'),
+                    selectModeBtn: document.getElementById('select-mode-btn'),
+                    soloModeBtn: document.getElementById('solo-mode-btn'),
+                    multiplayerModeBtn: document.getElementById('multiplayer-mode-btn'),
+                    createRoomBtn: document.getElementById('create-room-btn'),
+                    joinRoomBtn: document.getElementById('join-room-btn'),
+                    backToMenuBtn: document.getElementById('back-to-menu-btn'),
+                    backBtns: document.querySelectorAll('.back-btn'),
+                    roomCodeInput: document.getElementById('room-code-input'),
+                    roomCodeDisplay: document.getElementById('room-code-display'),
+                    playerNameInput: document.getElementById('player-name-input'),
+                    manaLabel: document.getElementById('mana-label'),
+                    xpLabel: document.getElementById('xp-label'),
+                    manaBar: document.getElementById('mana-bar-inner'),
+                    xpBar: document.getElementById('xp-bar-inner'),
+                    score: document.getElementById('score'),
+                    goldDisplay: document.getElementById('gold-display'),
+                    comboDisplay: document.getElementById('combo-display'),
+                    playerLevel: document.getElementById('player-level'),
+                    currentCard: document.getElementById('current-card'),
+                    nextCardFlipper: document.querySelector('.card-flipper'),
+                    nextCardFront: document.querySelector('.card-front'),
+                    higherBtn: document.getElementById('higher-btn'),
+                    lowerBtn: document.getElementById('lower-btn'),
+                    scryBtn: document.getElementById('scry-btn'),
+                    secondChanceIcon: document.getElementById('second-chance-icon'),
+                    reshuffleBtn: document.getElementById('reshuffle-btn'),
+                    opponentStats: document.getElementById('opponent-stats'),
+                    opponentName: document.getElementById('opponent-name'),
+                    opponentScore: document.getElementById('opponent-score'),
+                    opponentLevel: document.getElementById('opponent-level'),
+                    opponentLives: document.getElementById('opponent-lives'),
+                    livesDisplay: document.getElementById('lives-display'),
+                    shopModal: document.getElementById('modal-shop'),
+                    upgradesContainer: document.getElementById('upgrades-container'),
+                    closeShopBtn: document.getElementById('close-shop-btn'),
+                    statsBtn: document.getElementById('stats-btn'),
+                    gameOverModal: document.getElementById('modal-gameover'),
+                    modalTitle: document.getElementById('modal-title'),
+                    modalMessage: document.getElementById('modal-message'),
+                },
+                state: {
+                    deck: [], currentCard: null, nextCard: null, score: 0, combo: 1, isProcessing: false, secondChanceActive: true, gameMode: 'solo',
+                    lives: 3, player: { level: 1, xp: 0, gold: 0, upgrades: { maxMana: 0, manaRegen: 0, scryCost: 0 } }, mana: 10,
+                },
+                CONFIG: {
+                    XP_PER_LEVEL: (level) => 100 + (level - 1) * 50,
+                    UPGRADES: {
+                        maxMana: { name: "Mana Máxima", baseCost: 50, scale: 1.5, effect: 5 },
+                        manaRegen: { name: "Regen de Mana", baseCost: 100, scale: 2, effect: 1 },
+                        scryCost: { name: "Vislumbre Eficaz", baseCost: 200, scale: 2.5, effect: -1 },
+                    },
+                    BASE_MANA: 10,
+                    SPELL_COSTS: { scry: 15, reshuffle: 10 },
+                    SUITS: { "hearts": "♥", "diamonds": "♦", "clubs": "♣", "spades": "♠" },
+                    RANKS: ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"],
+                    VALUES: { "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "J": 11, "Q": 12, "K": 13, "A": 14 },
+                },
+
+                init() {
+                    this.loadGame();
+                    this.UI.selectModeBtn.addEventListener('click', () => {
+                        playerName = this.UI.playerNameInput.value.trim();
+                        if (playerName) this.showScreen('modeSelection'); else alert('Por favor, digite seu nome.');
+                    });
+                    this.UI.backBtns.forEach(btn => btn.addEventListener('click', () => this.showScreen('mainMenu')));
+                    this.UI.soloModeBtn.addEventListener('click', () => { this.state.gameMode = 'solo'; this.showScreen('gameContainer'); this.startGame(); });
+                    this.UI.multiplayerModeBtn.addEventListener('click', () => { this.showScreen('multiplayerLobby'); this.connectToServer(); });
+                    this.UI.backToMenuBtn.addEventListener('click', () => { this.showScreen('mainMenu'); this.UI.gameOverModal.classList.remove('visible'); if(ws) ws.close(); });
+                    this.UI.higherBtn.addEventListener('click', () => this.handleGuess('higher'));
+                    this.UI.lowerBtn.addEventListener('click', () => this.handleGuess('lower'));
+                    this.UI.scryBtn.addEventListener('click', () => this.castScry());
+                    this.UI.reshuffleBtn.addEventListener('click', () => this.castReshuffle());
+                    this.UI.createRoomBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'create', playerName })));
+                    this.UI.joinRoomBtn.addEventListener('click', () => this.UI.roomCodeInput.classList.toggle('hidden'));
+                    this.UI.roomCodeInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') ws.send(JSON.stringify({ type: 'join', roomCode: e.target.value, playerName })); });
+                    this.UI.statsBtn.addEventListener('click', () => this.openShop());
+                    this.UI.closeShopBtn.addEventListener('click', () => this.UI.shopModal.classList.remove('visible'));
+                    this.showScreen('mainMenu');
+                },
+
+                showScreen(screenName) {
+                    Object.keys(this.UI).forEach(key => { if (this.UI[key].classList && this.UI[key].classList.contains('screen')) { this.UI[key].classList.add('hidden'); } });
+                    this.UI[screenName].classList.remove('hidden');
+                },
+
+                startGame() {
+                    this.state.score = 0; this.state.combo = 1; this.state.isProcessing = false; this.state.mana = this.getMaxMana();
+                    if (this.state.gameMode === '1v1') {
+                        this.state.lives = 3;
+                        this.UI.opponentStats.classList.remove('hidden');
+                        this.UI.livesDisplay.classList.remove('hidden');
+                    } else {
+                        this.state.secondChanceActive = true;
+                        this.UI.opponentStats.classList.add('hidden');
+                        this.UI.livesDisplay.classList.add('hidden');
+                    }
+                    this.state.deck = this.createDeck();
+                    this.shuffleDeck(this.state.deck);
+                    this.state.currentCard = this.state.deck.pop();
+                    this.renderCard(this.UI.currentCard, this.state.currentCard);
+                    this.UI.nextCardFront.innerHTML = '';
+                    this.UI.nextCardFront.classList.remove('red', 'black');
+                    this.UI.nextCardFlipper.classList.remove('flipped');
+                    this.updateUI();
+                    this.UI.gameOverModal.classList.remove('visible');
+                    this.enableControls(true);
+                },
+                createDeck() { const d = []; for (let s in this.CONFIG.SUITS) { for (let r of this.CONFIG.RANKS) { d.push({ suit: this.CONFIG.SUITS[s], rank: r, value: this.CONFIG.VALUES[r], color: (s==='hearts'||s==='diamonds')?'red':'black' }); } } return d; },
+                shuffleDeck(d) { for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; } },
+                renderCard(el, card) { el.innerHTML = `<span class="rank">${card.rank}</span><span class="suit">${card.suit}</span><span class="rank rank-bottom">${card.rank}</span>`; el.className = `card ${card.color}`; },
+                renderCardFace(el, card) { el.innerHTML = `<span class="rank">${card.rank}</span><span class="suit">${card.suit}</span><span class="rank rank-bottom">${card.rank}</span>`; el.classList.remove('red', 'black'); el.classList.add(card.color); },
+
+                handleGuess(guess) {
+                    if (this.state.isProcessing) return;
+                    this.state.isProcessing = true; this.enableControls(false);
+                    this.state.nextCard = this.state.deck.pop();
+                    this.renderCardFace(this.UI.nextCardFront, this.state.nextCard);
+                    this.UI.nextCardFlipper.classList.add('flipped');
+                    const isCorrect = (guess === 'higher' && this.state.nextCard.value >= this.state.currentCard.value) || (guess === 'lower' && this.state.nextCard.value <= this.state.currentCard.value);
+                    setTimeout(() => {
+                        if (isCorrect) {
+                            this.state.score++; this.state.combo++;
+                            this.state.mana = Math.min(this.getMaxMana(), this.state.mana + 1 + this.getUpgradeEffect('manaRegen'));
+                            this.state.currentCard = this.state.nextCard;
+                            if (this.state.gameMode === '1v1') ws.send(JSON.stringify({ type: 'update', state: { score: this.state.score, level: this.state.player.level } }));
+                            this.UI.nextCardFlipper.style.transition = 'none';
+                            this.UI.nextCardFlipper.classList.remove('flipped');
+                            this.renderCard(this.UI.currentCard, this.state.currentCard);
+                            this.UI.nextCardFront.innerHTML = '';
+                            this.UI.nextCardFront.classList.remove('red', 'black');
+                            setTimeout(() => { this.UI.nextCardFlipper.style.transition = 'transform 0.6s'; this.state.isProcessing = false; this.enableControls(true); }, 50);
+                        } else {
+                            if (this.state.gameMode === '1v1') { ws.send(JSON.stringify({type: 'lostLife'})); this.state.lives--; this.createFloatingText('-1 Vida!', 'health'); this.newTurn(); }
+                            else {
+                                if (this.state.secondChanceActive) {
+                                    this.state.secondChanceActive = false;
+                                    this.createFloatingText('Segunda Chance!', 'health');
+                                    this.state.isProcessing = false; this.enableControls(true);
+                                    this.UI.nextCardFlipper.classList.remove('flipped');
+                                } else {
+                                    const xpGained = this.state.score * 10; const goldGained = this.state.score * 5;
+                                    this.state.player.xp += xpGained; this.state.player.gold += goldGained;
+                                    this.checkLevelUp(); this.saveGame();
+                                    this.showGameOver(false, `Você alcançou o andar ${this.state.score}. Recompensas: ${xpGained} XP, ${goldGained} Ouro.`);
+                                }
+                            }
+                        }
+                        this.updateUI();
+                    }, 1200);
+                },
+                newTurn() { this.state.score = 0; this.state.combo = 1; this.state.isProcessing = false; this.enableControls(true); this.UI.nextCardFlipper.classList.remove('flipped'); this.state.deck = this.createDeck(); this.shuffleDeck(this.state.deck); this.state.currentCard = this.state.deck.pop(); this.renderCard(this.UI.currentCard, this.state.currentCard); },
+                castScry() { const cost = this.getSpellCost('scry'); if (this.state.mana >= cost && !this.state.isProcessing) { this.state.mana -= cost; this.state.nextCard = this.state.deck[this.state.deck.length - 1]; this.renderCardFace(this.UI.nextCardFront, this.state.nextCard); this.UI.nextCardFlipper.classList.add('flipped'); setTimeout(() => this.UI.nextCardFlipper.classList.remove('flipped'), 2000); this.updateUI(); } },
+                castReshuffle() { const cost = this.CONFIG.SPELL_COSTS.reshuffle; if (this.state.mana >= cost && !this.state.isProcessing) { this.state.mana -= cost; this.state.deck.push(this.state.currentCard); this.shuffleDeck(this.state.deck); this.state.currentCard = this.state.deck.pop(); this.renderCard(this.UI.currentCard, this.state.currentCard); this.createFloatingText('Embaralhar!', 'spell'); this.updateUI(); } },
+                showGameOver(isWinner, message) { this.UI.modalTitle.textContent = isWinner ? "Você Venceu!" : "Fim de Jogo"; this.UI.modalMessage.textContent = message; this.UI.gameOverModal.classList.add('visible'); },
+                updateUI() {
+                    this.UI.score.textContent = `Andar: ${this.state.score}`; this.UI.goldDisplay.textContent = `Ouro: ${this.state.player.gold}`;
+                    this.UI.comboDisplay.textContent = `Combo: x${this.state.combo}`; this.UI.playerLevel.textContent = this.state.player.level;
+                    const maxMana = this.getMaxMana(); this.UI.manaLabel.textContent = `${this.state.mana}/${maxMana}`;
+                    this.UI.manaBar.style.width = `${(this.state.mana / maxMana) * 100}%`;
+                    const xpNeeded = this.CONFIG.XP_PER_LEVEL(this.state.player.level); this.UI.xpLabel.textContent = `${this.state.player.xp}/${xpNeeded}`;
+                    this.UI.xpBar.style.width = `${(this.state.player.xp / xpNeeded) * 100}%`;
+                    if (this.state.gameMode === 'solo') { this.UI.secondChanceIcon.style.display = 'inline-block'; this.UI.secondChanceIcon.classList.toggle('active', this.state.secondChanceActive); }
+                    else { this.UI.secondChanceIcon.style.display = 'none'; this.UI.livesDisplay.textContent = 'Vidas: ' + '❤️'.repeat(this.state.lives); }
+                },
+                enableControls(enabled) { this.UI.higherBtn.disabled = !enabled; this.UI.lowerBtn.disabled = !enabled; this.UI.scryBtn.disabled = !enabled; this.UI.reshuffleBtn.disabled = !enabled; },
+                createFloatingText(text, type) { const el = document.createElement('div'); el.className = 'floating-text'; el.textContent = text; if(type === 'health') el.style.color = 'var(--health-color)'; if(type === 'spell') el.style.color = 'var(--primary-accent)'; document.getElementById('floating-text-container').appendChild(el); setTimeout(() => el.remove(), 1500); },
+                connectToServer() {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    ws = new WebSocket(`${protocol}//${window.location.host}`);
+                    ws.onopen = () => console.log('Conectado ao servidor!');
+                    ws.onclose = () => { if(this.state.gameMode === '1v1') this.showGameOver(false, "Desconectado do servidor."); };
+                    ws.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        switch (data.type) {
+                            case 'roomCreated': this.UI.roomCodeDisplay.textContent = `Código: ${data.roomCode}`; break;
+                            case 'gameStarted': this.createFloatingText('O Jogo Começou!', 'spell'); this.UI.opponentName.textContent = data.opponentName; setTimeout(() => { this.state.gameMode = '1v1'; this.showScreen('gameContainer'); this.startGame(); }, 1500); break;
+                            case 'opponentUpdate': this.UI.opponentScore.textContent = data.state.score; this.UI.opponentLevel.textContent = data.state.level; break;
+                            case 'opponentLostLife': this.UI.opponentLives.textContent = data.remainingLives; break;
+                            case 'gameOver': this.showGameOver(data.winner, data.message); break;
+                            case 'opponentDisconnected': this.showGameOver(true, "Seu oponente desconectou."); break;
+                            case 'error': alert(data.message); break;
+                        }
+                    };
+                },
+                getMaxMana() { return this.CONFIG.BASE_MANA + this.getUpgradeEffect('maxMana'); },
+                getSpellCost(spell) { if (spell === 'scry') return Math.max(1, this.CONFIG.SPELL_COSTS.scry + this.getUpgradeEffect('scryCost')); return this.CONFIG.SPELL_COSTS[spell]; },
+                getUpgradeEffect(key) { return (this.state.player.upgrades[key] || 0) * this.CONFIG.UPGRADES[key].effect; },
+                checkLevelUp() { let xpNeeded = this.CONFIG.XP_PER_LEVEL(this.state.player.level); while (this.state.player.xp >= xpNeeded) { this.state.player.xp -= xpNeeded; this.state.player.level++; this.createFloatingText(`Nível ${this.state.player.level}!`, 'xp'); xpNeeded = this.CONFIG.XP_PER_LEVEL(this.state.player.level); } },
+                openShop() {
+                    this.UI.upgradesContainer.innerHTML = '';
+                    for (const key in this.CONFIG.UPGRADES) {
+                        const upgrade = this.CONFIG.UPGRADES[key]; const level = this.state.player.upgrades[key] || 0;
+                        const cost = Math.floor(upgrade.baseCost * Math.pow(upgrade.scale, level));
+                        const item = document.createElement('div'); item.className = 'upgrade-item';
+                        item.innerHTML = `<p>${upgrade.name} (Nv. ${level})</p><button data-key="${key}">Melhorar (${cost}💰)</button>`;
+                        item.querySelector('button').addEventListener('click', () => this.buyUpgrade(key));
+                        this.UI.upgradesContainer.appendChild(item);
+                    }
+                    this.UI.shopModal.classList.add('visible');
+                },
+                buyUpgrade(key) {
+                    const upgrade = this.CONFIG.UPGRADES[key]; const level = this.state.player.upgrades[key] || 0;
+                    const cost = Math.floor(upgrade.baseCost * Math.pow(upgrade.scale, level));
+                    if (this.state.player.gold >= cost) {
+                        this.state.player.gold -= cost; this.state.player.upgrades[key]++; this.saveGame(); this.openShop(); this.updateUI();
+                    } else { this.createFloatingText('Ouro Insuficiente!', 'health'); }
+                },
+                saveGame() { localStorage.setItem('dueloDeCartasSave', JSON.stringify(this.state.player)); },
+                loadGame() { const saved = localStorage.getItem('dueloDeCartasSave'); if(saved) this.state.player = JSON.parse(saved); }
+            };
+            G.init();
+        });
+    </script>
+</body>
+  </html>
